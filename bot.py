@@ -4,6 +4,7 @@ import os
 import sys
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.helpers import escape_markdown
 from telegram.ext import (
     Application,
     CallbackQueryHandler,
@@ -67,7 +68,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     await update.message.reply_text(
         f"🎶 *Євробачення {YEAR}!*\n\n"
-        f"Привіт, {user.first_name}! 👋\n\n"
+        f"Привіт, {escape_markdown(user.first_name or '', version=1)}! 👋\n\n"
         f"Тут ти можеш:\n"
         f"• Ставити оцінки виступам (1–10 балів)\n"
         f"• Передбачати фінальні місця\n"
@@ -375,7 +376,9 @@ async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
         text += "\n🏆 *Рейтинг передбачень:*\n"
         for i, s in enumerate(scores, 1):
             medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
-            name = s.get("username") or s.get("first_name", "Анонім")
+            name = escape_markdown(
+                s.get("username") or s.get("first_name") or "Анонім", version=1
+            )
             text += f"{medal} @{name} — {s['score']:.0f}%\n"
     else:
         text += "\n_Ніхто ще не зробив передбачень._"
@@ -538,10 +541,11 @@ async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lines = [f"✅ Результати збережено! ({len(results)} місць)\n"]
         if scores:
             winner = scores[0]
-            name = winner.get("username") or winner.get("first_name", "Анонім")
-            lines.append(
-                f"🥇 @{name} з точністю {winner['score']:.0f}%!"
+            name = escape_markdown(
+                winner.get("username") or winner.get("first_name") or "Анонім",
+                version=1,
             )
+            lines.append(f"🥇 @{name} з точністю {winner['score']:.0f}%!")
         await query.edit_message_text("\n".join(lines))
         return
 
