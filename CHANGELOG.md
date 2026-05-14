@@ -11,6 +11,12 @@ All notable changes to this project will be documented in this file.
 
 ### Changed
 - All user-facing text now uses the year from `finalists.json` instead of a hardcoded `2026`. The startup loader fails fast on missing/malformed config or duplicate country entries.
+- **Scoring is now fair against partial predictions.** Predictions for countries outside the official top-10, and unfilled slots, both count as 0 points. The average is always divided by 10 (the top-N), so a user who submits only one lucky guess no longer scores 100% — they're now compared against a baseline of 10 perfect predictions.
+- **Same country can no longer occupy multiple prediction slots.** Database constraint `UNIQUE(user_id, country)` enforces this; the bot now auto-moves the country to the new slot and tells the user "🔁 Moved! Country: #X → #Y". Already-placed countries are marked with ✅ in the country picker.
+
+### Fixed
+- `predictions.place` is now constrained to `1..10` at the database level (`CHECK(place BETWEEN 1 AND 10)`); a malicious callback can no longer write garbage place values.
+- Legacy databases are migrated transparently on next start (`init_db()` detects old schema and rebuilds the `predictions` table, de-duplicating any `(user_id, country)` pairs by keeping the most recent row).
 
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

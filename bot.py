@@ -237,11 +237,18 @@ async def prediction_place_selected(update: Update, context: ContextTypes.DEFAUL
     place = int(query.data.split("_")[1])
     context.user_data["predict_place"] = place
 
+    used = {p["country"]: p["place"] for p in db.get_user_predictions(query.from_user.id)}
+
     keyboard = []
     row = []
     for i, country in enumerate(COUNTRIES):
-        btn = InlineKeyboardButton(country, callback_data=f"pcountry_{i}")
-        row.append(btn)
+        if country in used and used[country] != place:
+            label = f"✅ {country}"
+        elif country in used and used[country] == place:
+            label = f"⭐ {country}"
+        else:
+            label = country
+        row.append(InlineKeyboardButton(label, callback_data=f"pcountry_{i}"))
         if len(row) == 2:
             keyboard.append(row)
             row = []
@@ -250,7 +257,8 @@ async def prediction_place_selected(update: Update, context: ContextTypes.DEFAUL
     keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_predict")])
 
     await query.edit_message_text(
-        f"🔮 Хто займе *#{place} місце*?\n\nОбери країну:",
+        f"🔮 Хто займе *#{place} місце*?\n\n"
+        f"Обери країну (✅ — вже передбачена в іншому місці, ⭐ — поточний вибір):",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
     )
@@ -267,10 +275,16 @@ async def prediction_country_selected(
     user_id = query.from_user.id
 
     if place:
-        db.save_prediction(user_id, place, country)
+        moved_from = db.save_prediction(user_id, place, country)
+        if moved_from is not None:
+            header = (
+                f"🔁 Переміщено! *{country}*: #{moved_from} → #{place}\n"
+                f"_Кожна країна може зайняти лише одне місце у твоєму топ-10._"
+            )
+        else:
+            header = f"✅ Збережено! Місце #{place} → *{country}*"
         await query.edit_message_text(
-            f"✅ Збережено! Місце #{place} → *{country}*\n\n"
-            f"Продовжуй заповнювати передбачення!",
+            f"{header}\n\nПродовжуй заповнювати передбачення!",
             parse_mode="Markdown",
             reply_markup=InlineKeyboardMarkup(
                 [
