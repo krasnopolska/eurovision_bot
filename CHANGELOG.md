@@ -18,5 +18,10 @@ All notable changes to this project will be documented in this file.
 - `predictions.place` is now constrained to `1..10` at the database level (`CHECK(place BETWEEN 1 AND 10)`); a malicious callback can no longer write garbage place values.
 - Legacy databases are migrated transparently on next start (`init_db()` detects old schema and rebuilds the `predictions` table, de-duplicating any `(user_id, country)` pairs by keeping the most recent row).
 
+### Changed (admin UX)
+- **`/setresults` is now an interactive wizard, not a text command.** Admin types `/setresults`, taps each place to pick a country from the inline keyboard, and the **Save Results** button stays disabled until all 10 slots are filled. Fixes the old text-parser bugs (multi-word names like "Велика Британія" silently corrupting downstream args, missing-match fuzzy-fallbacks silently writing wrong rows, place/country mismatches from `int()` crashes).
+- The wizard de-duplicates picks automatically — choosing a country already used in another slot moves it.
+- If official results are already saved, `/setresults` first asks "⚠️ Replace existing results?" with Yes/No, so a re-run no longer accidentally wipes the table.
+
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

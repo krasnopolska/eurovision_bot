@@ -15,6 +15,7 @@ from telegram.ext import (
 )
 
 import data as db
+from data import TOP_N
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s", level=logging.INFO
@@ -384,34 +385,192 @@ async def set_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    args = context.args
-    if len(args) < 2 or len(args) % 2 != 0:
+    existing = db.get_official_results()
+    if existing:
         await update.message.reply_text(
-            "Формат: `/setresults 1 Швейцарія 2 Франція 3 Ізраїль ...`\n(місце країна)",
+            f"⚠️ Вже введено *{len(existing)}* результат(ів). "
+            f"Замінити їх новими?",
             parse_mode="Markdown",
+            reply_markup=InlineKeyboardMarkup(
+                [
+                    [
+                        InlineKeyboardButton(
+                            "✅ Так, замінити", callback_data="admin_overwrite_yes"
+                        )
+                    ],
+                    [
+                        InlineKeyboardButton(
+                            "❌ Скасувати", callback_data="admin_overwrite_no"
+                        )
+                    ],
+                ]
+            ),
         )
         return
 
-    results = []
-    for i in range(0, len(args), 2):
-        place = int(args[i])
-        country_query = args[i + 1]
-        matched = next(
-            (c for c in COUNTRIES if country_query.lower() in c.lower()), country_query
+    context.user_data["admin_pending"] = {}
+    await _show_admin_wizard(update.message, context)
+
+
+async def _show_admin_wizard(target, context):
+    """Render the results wizard. `target` is either a Message (initial send) or a
+    CallbackQuery (edit existing message)."""
+    pending: dict[int, str] = context.user_data.get("admin_pending", {})
+
+    keyboard = []
+    for place in range(1, TOP_N + 1):
+        country = pending.get(place)
+        label = f"#{place} → {country}" if country else f"#{place} — не встановлено"
+        keyboard.append([InlineKeyboardButton(label, callback_data=f"admin_place_{place}")])
+
+    filled = len(pending)
+    if filled == TOP_N:
+        save_btn = InlineKeyboardButton("💾 Зберегти результати", callback_data="admin_save")
+    else:
+        save_btn = InlineKeyboardButton(
+            f"💾 Зберегти ({filled}/{TOP_N})", callback_data="admin_save_blocked"
         )
-        results.append((place, matched))
+    keyboard.append(
+        [save_btn, InlineKeyboardButton("❌ Скасувати", callback_data="admin_cancel")]
+    )
 
-    db.save_official_results(results)
+    text = (
+        "🎯 *Офіційні результати*\n\n"
+        f"Заповнено: {filled}/{TOP_N}. Натисни на місце, щоб обрати країну."
+    )
+    markup = InlineKeyboardMarkup(keyboard)
 
-    scores = db.calculate_all_scores()
-    msg = f"✅ Результати збережено! ({len(results)} місць)\n\n"
-    if scores:
-        msg += "🏆 Переможець передбачень:\n"
-        winner = scores[0]
-        name = winner.get("username") or winner.get("first_name", "Анонім")
-        msg += f"🥇 @{name} з точністю {winner['score']:.0f}%!"
+    if hasattr(target, "edit_message_text"):
+        await target.edit_message_text(text, parse_mode="Markdown", reply_markup=markup)
+    else:
+        await target.reply_text(text, parse_mode="Markdown", reply_markup=markup)
 
-    await update.message.reply_text(msg)
+
+async def _show_admin_country_picker(query, context, place: int):
+    pending: dict[int, str] = context.user_data.get("admin_pending", {})
+    used = {c: p for p, c in pending.items()}
+
+    keyboard = []
+    row = []
+    for i, country in enumerate(COUNTRIES):
+        if country in used and used[country] != place:
+            label = f"✅ {country}"
+        elif country in used and used[country] == place:
+            label = f"⭐ {country}"
+        else:
+            label = country
+        row.append(InlineKeyboardButton(label, callback_data=f"admin_country_{place}_{i}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    bottom = []
+    if place in pending:
+        bottom.append(
+            InlineKeyboardButton(f"🗑 Очистити #{place}", callback_data=f"admin_clear_{place}")
+        )
+    bottom.append(InlineKeyboardButton("◀️ Назад", callback_data="admin_back"))
+    keyboard.append(bottom)
+
+    await query.edit_message_text(
+        f"🎯 Хто посів *#{place} місце*?\n\n"
+        f"Обери країну (✅ — вже у списку, ⭐ — поточний вибір):",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def admin_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    user_id = query.from_user.id
+
+    if not db.is_admin(user_id):
+        await query.answer("❌ Тільки адміністратор.", show_alert=True)
+        return
+
+    data = query.data
+
+    if data == "admin_overwrite_yes":
+        await query.answer()
+        context.user_data["admin_pending"] = {}
+        await _show_admin_wizard(query, context)
+        return
+
+    if data == "admin_overwrite_no":
+        await query.answer()
+        await query.edit_message_text("✅ Скасовано. Існуючі результати збережено.")
+        return
+
+    if data == "admin_cancel":
+        await query.answer()
+        context.user_data.pop("admin_pending", None)
+        await query.edit_message_text("❌ Скасовано.")
+        return
+
+    if data == "admin_save_blocked":
+        await query.answer(
+            f"Заповни всі {TOP_N} місць перед збереженням.", show_alert=True
+        )
+        return
+
+    if data == "admin_save":
+        await query.answer()
+        pending: dict[int, str] = context.user_data.get("admin_pending", {})
+        if len(pending) != TOP_N:
+            await query.answer(
+                f"Потрібно заповнити всі {TOP_N} місць.", show_alert=True
+            )
+            return
+        results = [(place, country) for place, country in sorted(pending.items())]
+        db.save_official_results(results)
+        context.user_data.pop("admin_pending", None)
+
+        scores = db.calculate_all_scores()
+        lines = [f"✅ Результати збережено! ({len(results)} місць)\n"]
+        if scores:
+            winner = scores[0]
+            name = winner.get("username") or winner.get("first_name", "Анонім")
+            lines.append(
+                f"🥇 @{name} з точністю {winner['score']:.0f}%!"
+            )
+        await query.edit_message_text("\n".join(lines))
+        return
+
+    if data == "admin_back":
+        await query.answer()
+        await _show_admin_wizard(query, context)
+        return
+
+    if data.startswith("admin_place_"):
+        await query.answer()
+        place = int(data.split("_")[2])
+        await _show_admin_country_picker(query, context, place)
+        return
+
+    if data.startswith("admin_clear_"):
+        await query.answer()
+        place = int(data.split("_")[2])
+        pending = context.user_data.setdefault("admin_pending", {})
+        pending.pop(place, None)
+        await _show_admin_wizard(query, context)
+        return
+
+    if data.startswith("admin_country_"):
+        await query.answer()
+        parts = data.split("_")
+        place = int(parts[2])
+        idx = int(parts[3])
+        country = COUNTRIES[idx]
+        pending = context.user_data.setdefault("admin_pending", {})
+        # Single-slot rule: if this country is already in another slot, move it.
+        for p, c in list(pending.items()):
+            if c == country and p != place:
+                del pending[p]
+        pending[place] = country
+        await _show_admin_wizard(query, context)
+        return
 
 
 # ── Встановити адміна ──────────────────────────────────────────────────────────
@@ -490,6 +649,9 @@ def main():
     app.add_handler(
         CallbackQueryHandler(prediction_country_selected, pattern="^pcountry_\\d+$")
     )
+
+    # Admin wizard flow (/setresults)
+    app.add_handler(CallbackQueryHandler(admin_callback, pattern="^admin_"))
 
     print("🎶 Eurovision Bot запущено! Натисни Ctrl+C для зупинки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)

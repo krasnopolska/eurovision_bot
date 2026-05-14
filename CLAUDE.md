@@ -42,8 +42,8 @@ Two files:
 
 - **Rating a country**: `menu_rate` → `show_countries_for_rating` → user clicks `rate_{idx}` → `rate_country_selected` (stores country in `user_data`) → user clicks `score_{n}` → `score_selected` → `db.save_rating()`
 - **Making a prediction**: `menu_predict` → `show_prediction_menu` → user clicks `pred_{place}` → `prediction_place_selected` (stores place in `user_data`) → user clicks `pcountry_{idx}` → `prediction_country_selected` → `db.save_prediction()`
-- **Entering official results** (admin only): `/setresults 1 Country 2 Country ...` — pairs of place+country name; country name is fuzzy-matched against `COUNTRIES` list
+- **Entering official results** (admin only): `/setresults` opens an interactive wizard. Callback prefix is `admin_*` (handled by `admin_callback`). State lives in `context.user_data["admin_pending"]` as `{place: country}`. Save button is gated until all 10 slots filled; if `official_results` already has rows, the wizard first asks for overwrite confirmation.
 
 ## Countries list
 
-`COUNTRIES` in `bot.py` is the hardcoded list of 37 Eurovision 2025 finalists with flag emojis. Country names in the DB are stored with their flag emojis (e.g. `"🇨🇭 Швейцарія"`), so `/setresults` arguments must match (partial match against the emoji+name string).
+`COUNTRIES` and the contest `YEAR` are loaded at startup from `finalists.json` (path overridable via `FINALISTS_PATH`). The loader fails fast on missing/malformed config or duplicate countries. Country names in the DB are stored with their flag emojis (e.g. `"🇨🇭 Швейцарія"`). To bump to a new year, edit `finalists.json` — no code change needed.
