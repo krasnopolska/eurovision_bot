@@ -24,6 +24,8 @@ All notable changes to this project will be documented in this file.
 - If official results are already saved, `/setresults` first asks "⚠️ Replace existing results?" with Yes/No, so a re-run no longer accidentally wipes the table.
 - `/winner` no longer shows a partial leaderboard. If fewer than 10 official results are stored (e.g. from a legacy partial entry), the command replies "⏳ Results not complete yet — N/10 places entered" and waits for the admin to finish.
 - Telegram first names and usernames are now escaped via `escape_markdown(name, version=1)` before being echoed back. Previously, a user named `*test_` or `[a](url)` would crash the handler (`/start`, `/winner`, admin-save success) with a Markdown parse error.
+- After a bot restart, the rating and prediction flows no longer fall through silently. If the user clicks a score / country button without an active selection in `user_data`, they now see a friendly "⌛ Session lost — please pick again" message with a button to restart the flow.
+- Registered a catch-all error handler that logs the full traceback and replies "⚠️ Something went wrong, try again". Handles stale callback queries (>48h), network blips, and any future handler escape.
 
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

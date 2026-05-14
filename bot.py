@@ -193,19 +193,28 @@ async def score_selected(update: Update, context: ContextTypes.DEFAULT_TYPE):
     country = context.user_data.get("rating_country")
     user_id = query.from_user.id
 
-    if country:
-        db.save_rating(user_id, country, score)
+    if not country:
         await query.edit_message_text(
-            f"✅ Збережено! *{country}* — {score} балів\n\n"
-            f"Продовжуй оцінювати або повертайся в меню.",
-            parse_mode="Markdown",
+            "⌛ Сесію втрачено (бот міг перезапуститись).\n\n"
+            "Обери країну ще раз, будь ласка.",
             reply_markup=InlineKeyboardMarkup(
-                [
-                    [InlineKeyboardButton("⭐ Оцінити ще", callback_data="menu_rate")],
-                    [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
-                ]
+                [[InlineKeyboardButton("⭐ Обрати країну", callback_data="menu_rate")]]
             ),
         )
+        return
+
+    db.save_rating(user_id, country, score)
+    await query.edit_message_text(
+        f"✅ Збережено! *{country}* — {score} балів\n\n"
+        f"Продовжуй оцінювати або повертайся в меню.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("⭐ Оцінити ще", callback_data="menu_rate")],
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
+            ]
+        ),
+    )
 
 
 # ── Передбачення місць ─────────────────────────────────────────────────────────
@@ -276,29 +285,44 @@ async def prediction_country_selected(
     place = context.user_data.get("predict_place")
     user_id = query.from_user.id
 
-    if place:
-        moved_from = db.save_prediction(user_id, place, country)
-        if moved_from is not None:
-            header = (
-                f"🔁 Переміщено! *{country}*: #{moved_from} → #{place}\n"
-                f"_Кожна країна може зайняти лише одне місце у твоєму топ-10._"
-            )
-        else:
-            header = f"✅ Збережено! Місце #{place} → *{country}*"
+    if not place:
         await query.edit_message_text(
-            f"{header}\n\nПродовжуй заповнювати передбачення!",
-            parse_mode="Markdown",
+            "⌛ Сесію втрачено (бот міг перезапуститись).\n\n"
+            "Обери місце ще раз, будь ласка.",
             reply_markup=InlineKeyboardMarkup(
                 [
                     [
                         InlineKeyboardButton(
-                            "🔮 Продовжити передбачення", callback_data="menu_predict"
+                            "🔮 Обрати місце", callback_data="menu_predict"
                         )
-                    ],
-                    [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
+                    ]
                 ]
             ),
         )
+        return
+
+    moved_from = db.save_prediction(user_id, place, country)
+    if moved_from is not None:
+        header = (
+            f"🔁 Переміщено! *{country}*: #{moved_from} → #{place}\n"
+            f"_Кожна країна може зайняти лише одне місце у твоєму топ-10._"
+        )
+    else:
+        header = f"✅ Збережено! Місце #{place} → *{country}*"
+    await query.edit_message_text(
+        f"{header}\n\nПродовжуй заповнювати передбачення!",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔮 Продовжити передбачення", callback_data="menu_predict"
+                    )
+                ],
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
+            ]
+        ),
+    )
 
 
 # ── Мої оцінки ─────────────────────────────────────────────────────────────────
@@ -615,6 +639,29 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+# ── Global error handler ──────────────────────────────────────────────────────
+async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
+    """Last-line-of-defense: log the traceback and try to apologise to the user.
+
+    Common triggers: stale callback queries (>48h old), transient network errors,
+    rare Markdown parse failures that escape the per-handler escaping.
+    """
+    logger.exception("Unhandled exception in handler", exc_info=context.error)
+
+    if not isinstance(update, Update):
+        return
+    target = update.effective_message
+    if target is None:
+        return
+    try:
+        await target.reply_text(
+            "⚠️ Щось пішло не так. Спробуй ще раз або напиши /start."
+        )
+    except Exception:
+        # Don't let the error handler raise — it would loop.
+        logger.exception("Failed to deliver error message to user")
+
+
 # ── Назад в меню ──────────────────────────────────────────────────────────────
 async def back_to_menu(query, context):
     await query.edit_message_text(
@@ -663,6 +710,9 @@ def main():
 
     # Admin wizard flow (/setresults)
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^admin_"))
+
+    # Catch-all error handler
+    app.add_error_handler(on_error)
 
     print("🎶 Eurovision Bot запущено! Натисни Ctrl+C для зупинки.")
     app.run_polling(allowed_updates=Update.ALL_TYPES)
