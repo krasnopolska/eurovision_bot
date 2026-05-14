@@ -27,6 +27,7 @@ All notable changes to this project will be documented in this file.
 - After a bot restart, the rating and prediction flows no longer fall through silently. If the user clicks a score / country button without an active selection in `user_data`, they now see a friendly "⌛ Session lost — please pick again" message with a button to restart the flow.
 - Registered a catch-all error handler that logs the full traceback and replies "⚠️ Something went wrong, try again". Handles stale callback queries (>48h), network blips, and any future handler escape.
 - User names refresh on every interaction (not just at `/start`). The bot now runs a `TypeHandler` before each handler that upserts `first_name` / `username` from the Telegram update. Previously, `INSERT OR IGNORE` kept whatever name the user had when they first ran `/start`, so leaderboards still showed `@old_handle` after a rename.
+- `/setadmin` no longer tells two simultaneous callers that they both became admin. After the insert, the bot re-checks `is_admin(caller)`; the loser gets "❌ Someone else became admin first" instead of a fake success.
 
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

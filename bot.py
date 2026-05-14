@@ -614,9 +614,18 @@ async def set_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("Адмін вже встановлений!")
         return
     db.set_admin(user_id)
-    await update.message.reply_text(
-        f"✅ Ти тепер адмін!\nПісля фіналу введи результати: /setresults"
-    )
+    # Re-check: INSERT OR IGNORE silently drops simultaneous callers, so a
+    # second user who slipped past the empty check above would also have hit
+    # this line. Only the actual row owner gets the success message.
+    if db.is_admin(user_id):
+        await update.message.reply_text(
+            "✅ Ти тепер адмін!\nПісля фіналу введи результати: /setresults"
+        )
+    else:
+        await update.message.reply_text(
+            "❌ Хтось встиг стати адміном раніше. Спробуй /setadmin ще раз — якщо адміна "
+            "ще не призначено, ти отримаєш доступ."
+        )
 
 
 # ── Статистика ─────────────────────────────────────────────────────────────────
