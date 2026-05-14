@@ -86,7 +86,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• Ставити оцінки виступам (1–10 балів)\n"
         f"• Передбачати фінальні місця\n"
         f"• Змагатись з друзями — хто найточніше вгадає?\n\n"
-        f"Після оголошення результатів напиши /хтопереміг 🏆",
+        f"Після оголошення результатів напиши /winner 🏆",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD),
     )
@@ -475,7 +475,7 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("setresults", set_results))
     app.add_handler(CommandHandler("setadmin", set_admin))
-    app.add_handler(CommandHandler("хтопереміг", who_won))
+    app.add_handler(CommandHandler("winner", who_won))
 
     # Tab and menu callbacks
     app.add_handler(CallbackQueryHandler(menu_handler, pattern="^(tab_|menu_)"))
