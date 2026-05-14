@@ -700,6 +700,18 @@ async def set_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 # ── Статистика ─────────────────────────────────────────────────────────────────
+def _votes_label(n: int) -> str:
+    """Ukrainian plural form for 'vote': голос / голоси / голосів."""
+    if 11 <= n % 100 <= 14:
+        return "голосів"
+    last = n % 10
+    if last == 1:
+        return "голос"
+    if 2 <= last <= 4:
+        return "голоси"
+    return "голосів"
+
+
 async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = db.get_all_users()
     total_ratings = sum(len(db.get_user_ratings(u["user_id"])) for u in users)
@@ -713,7 +725,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if country_avgs:
         text += "*Топ-5 за середньою оцінкою:*\n"
         for c in country_avgs[:5]:
-            text += f"• {c['country']} — {c['avg']:.1f} балів\n"
+            text += (
+                f"• {c['country']} — {c['avg']:.1f} балів "
+                f"({c['votes']} {_votes_label(c['votes'])})\n"
+            )
 
     await update.message.reply_text(text, parse_mode="Markdown")
 
