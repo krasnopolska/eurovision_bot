@@ -31,6 +31,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added (UX)
 - **"🗑 Видалити оцінку" button** on the score-picker for any already-rated country. Previously, users could only overwrite a rating, never unrate. The button only appears when an existing rating is present.
+- **"🗑 Очистити #N" button** on the prediction country-picker for any already-filled slot. Lets users empty a slot without picking a stand-in country.
 
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

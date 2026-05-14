@@ -296,13 +296,52 @@ async def prediction_place_selected(update: Update, context: ContextTypes.DEFAUL
             row = []
     if row:
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_predict")])
+
+    bottom = []
+    if place in used.values():
+        bottom.append(
+            InlineKeyboardButton(
+                f"🗑 Очистити #{place}", callback_data=f"clrpred_{place}"
+            )
+        )
+    bottom.append(InlineKeyboardButton("◀️ Назад", callback_data="menu_predict"))
+    keyboard.append(bottom)
 
     await query.edit_message_text(
         f"🔮 Хто займе *#{place} місце*?\n\n"
         f"Обери країну (✅ — вже передбачена в іншому місці, ⭐ — поточний вибір):",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def clear_prediction(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    place = int(query.data.split("_")[1])
+    user_id = query.from_user.id
+
+    removed = db.delete_prediction(user_id, place)
+    context.user_data.pop("predict_place", None)
+
+    if removed:
+        text = f"🗑 Слот *#{place}* очищено."
+    else:
+        text = f"_Слот *#{place}* і так був порожнім._"
+
+    await query.edit_message_text(
+        f"{text}\n\nПродовжуй заповнювати передбачення!",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [
+                    InlineKeyboardButton(
+                        "🔮 Продовжити передбачення", callback_data="menu_predict"
+                    )
+                ],
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
+            ]
+        ),
     )
 
 
@@ -760,6 +799,7 @@ def main():
     app.add_handler(
         CallbackQueryHandler(prediction_country_selected, pattern="^pcountry_\\d+$")
     )
+    app.add_handler(CallbackQueryHandler(clear_prediction, pattern="^clrpred_\\d+$"))
 
     # Admin wizard flow (/setresults)
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^admin_"))

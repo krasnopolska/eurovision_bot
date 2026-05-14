@@ -190,6 +190,15 @@ def get_user_predictions(user_id: int):
         return [dict(row) for row in
                 conn.execute("SELECT * FROM predictions WHERE user_id=? ORDER BY place", (user_id,)).fetchall()]
 
+
+def delete_prediction(user_id: int, place: int) -> bool:
+    """Clear a single prediction slot. Returns True if a row was removed."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM predictions WHERE user_id=? AND place=?", (user_id, place)
+        )
+        return cur.rowcount > 0
+
 # ── Official Results ───────────────────────────────────────────────────────────
 def save_official_results(results: list[tuple[int, str]]):
     with get_conn() as conn:
