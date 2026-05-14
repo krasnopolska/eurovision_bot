@@ -68,29 +68,16 @@ COUNTRIES = [
     "🇱🇺 Люксембург",
 ]
 
+MAIN_KEYBOARD = [
+    [InlineKeyboardButton("⭐ Оцінити виступи фіналістів", callback_data="tab_rate")],
+    [InlineKeyboardButton("🔮 Передбачити місця фіналістів", callback_data="tab_predict")],
+]
+
 
 # ── /start ─────────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     db.register_user(user.id, user.first_name, user.username)
-
-    keyboard = [
-        [InlineKeyboardButton("⭐ Оцінити виступ", callback_data="menu_rate")],
-        [InlineKeyboardButton("🔮 Передбачення місць", callback_data="menu_predict")],
-        [InlineKeyboardButton("🏆 Таблиця лідерів", callback_data="menu_leaderboard")],
-        [InlineKeyboardButton("📊 Мої оцінки", callback_data="menu_my_ratings")],
-        [
-            InlineKeyboardButton(
-                "📋 Мої передбачення", callback_data="menu_my_predictions"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🎯 Результати (після фіналу)", callback_data="menu_results"
-            )
-        ],
-    ]
-    reply_markup = InlineKeyboardMarkup(keyboard)
 
     await update.message.reply_text(
         f"🎶 *Євробачення 2026!*\n\n"
@@ -99,9 +86,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         f"• Ставити оцінки виступам (1–10 балів)\n"
         f"• Передбачати фінальні місця\n"
         f"• Змагатись з друзями — хто найточніше вгадає?\n\n"
-        f"Після оголошення результатів бот автоматично підрахує переможця 🏆",
+        f"Після оголошення результатів напиши /хтопереміг 🏆",
         parse_mode="Markdown",
-        reply_markup=reply_markup,
+        reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD),
     )
 
 
@@ -111,20 +98,47 @@ async def menu_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await query.answer()
     data = query.data
 
-    if data == "menu_rate":
+    if data == "tab_rate":
+        await show_rating_tab(query, context)
+    elif data == "tab_predict":
+        await show_predict_tab(query, context)
+    elif data == "menu_rate":
         await show_countries_for_rating(query, context)
     elif data == "menu_predict":
         await show_prediction_menu(query, context)
-    elif data == "menu_leaderboard":
-        await show_leaderboard(query, context)
     elif data == "menu_my_ratings":
         await show_my_ratings(query, context)
     elif data == "menu_my_predictions":
         await show_my_predictions(query, context)
-    elif data == "menu_results":
-        await show_results(query, context)
     elif data == "menu_back":
         await back_to_menu(query, context)
+
+
+# ── Вкладки ────────────────────────────────────────────────────────────────────
+async def show_rating_tab(query, context):
+    keyboard = [
+        [InlineKeyboardButton("⭐ Оцінити виступ", callback_data="menu_rate")],
+        [InlineKeyboardButton("📊 Мої оцінки", callback_data="menu_my_ratings")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="menu_back")],
+    ]
+    await query.edit_message_text(
+        "⭐ *Оцінити виступи фіналістів*\n\nОбери дію:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def show_predict_tab(query, context):
+    keyboard = [
+        [InlineKeyboardButton("🔮 Зробити передбачення", callback_data="menu_predict")],
+        [InlineKeyboardButton("📋 Мої передбачення", callback_data="menu_my_predictions")],
+        [InlineKeyboardButton("◀️ Назад", callback_data="menu_back")],
+    ]
+    await query.edit_message_text(
+        "🔮 *Передбачити місця фіналістів*\n\nОбери дію:",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(keyboard),
+    )
 
 
 # ── Оцінка виступів ────────────────────────────────────────────────────────────
@@ -144,7 +158,7 @@ async def show_countries_for_rating(query, context):
             row = []
     if row:
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="tab_rate")])
 
     await query.edit_message_text(
         "⭐ *Оцінка виступів*\n\n"
@@ -174,7 +188,6 @@ async def rate_country_selected(update: Update, context: ContextTypes.DEFAULT_TY
         keyboard.append(row)
     keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_rate")])
 
-    # Check existing rating
     existing = db.get_user_rating_for_country(query.from_user.id, country)
     extra = f"\n_Поточна оцінка: {existing}/10_" if existing else ""
 
@@ -215,14 +228,14 @@ async def show_prediction_menu(query, context):
     count = len(predictions)
 
     keyboard = []
-    for place in range(1, 11):  # Передбачаємо топ-10
+    for place in range(1, 11):
         pred = next((p for p in predictions if p["place"] == place), None)
         if pred:
             label = f"#{place} → {pred['country']}"
         else:
             label = f"#{place} — не вказано"
         keyboard.append([InlineKeyboardButton(label, callback_data=f"pred_{place}")])
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_back")])
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="tab_predict")])
 
     await query.edit_message_text(
         "🔮 *Передбачення топ-10*\n\n"
@@ -305,7 +318,7 @@ async def show_my_ratings(query, context):
         text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("◀️ Назад", callback_data="menu_back")]]
+            [[InlineKeyboardButton("◀️ Назад", callback_data="tab_rate")]]
         ),
     )
 
@@ -330,82 +343,37 @@ async def show_my_predictions(query, context):
         text,
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("◀️ Назад", callback_data="menu_back")]]
+            [[InlineKeyboardButton("◀️ Назад", callback_data="tab_predict")]]
         ),
     )
 
 
-# ── Таблиця лідерів ────────────────────────────────────────────────────────────
-async def show_leaderboard(query, context):
-    users = db.get_all_users()
-    lines = ["🏆 *Таблиця лідерів*\n"]
-
-    if not users:
-        lines.append("Ще ніхто не зареєстрований!")
-    else:
-        for i, u in enumerate(users, 1):
-            ratings_count = len(db.get_user_ratings(u["user_id"]))
-            preds_count = len(db.get_user_predictions(u["user_id"]))
-            name = u.get("username") or u.get("first_name", "Анонім")
-            score = db.get_user_accuracy_score(u["user_id"])
-
-            medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
-            if score is not None:
-                lines.append(f"{medal} @{name} — точність: *{score:.0f}%*")
-            else:
-                lines.append(
-                    f"{medal} @{name} — оцінок: {ratings_count} | передбачень: {preds_count}/10"
-                )
-
-    lines.append("\n_Точність підрахується після введення офіційних результатів_ ⏳")
-
-    await query.edit_message_text(
-        "\n".join(lines),
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(
-            [
-                [InlineKeyboardButton("🔄 Оновити", callback_data="menu_leaderboard")],
-                [InlineKeyboardButton("◀️ Назад", callback_data="menu_back")],
-            ]
-        ),
-    )
-
-
-# ── Результати (для адміна) ────────────────────────────────────────────────────
-async def show_results(query, context):
+# ── /хтопереміг ───────────────────────────────────────────────────────────────
+async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
     results = db.get_official_results()
     if not results:
-        await query.edit_message_text(
-            "🎯 *Офіційні результати*\n\n"
-            "Результати ще не введені.\n\n"
-            "Адмін може ввести їх командою:\n"
-            "`/setresults`",
+        await update.message.reply_text(
+            "🎯 Результати ще не введені.\n\n"
+            "Адмін може ввести їх командою `/setresults`.",
             parse_mode="Markdown",
-            reply_markup=InlineKeyboardMarkup(
-                [[InlineKeyboardButton("◀️ Назад", callback_data="menu_back")]]
-            ),
         )
         return
 
-    text = "🎯 *Офіційні результати Євробачення 2025:*\n\n"
+    text = "🎯 *Офіційні результати Євробачення 2026:*\n\n"
     for r in results:
         text += f"#{r['place']} {r['country']}\n"
 
     scores = db.calculate_all_scores()
     if scores:
         text += "\n🏆 *Рейтинг передбачень:*\n"
-        for i, s in enumerate(scores[:5], 1):
+        for i, s in enumerate(scores, 1):
             medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
             name = s.get("username") or s.get("first_name", "Анонім")
             text += f"{medal} @{name} — {s['score']:.0f}%\n"
+    else:
+        text += "\n_Ніхто ще не зробив передбачень._"
 
-    await query.edit_message_text(
-        text,
-        parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(
-            [[InlineKeyboardButton("◀️ Назад", callback_data="menu_back")]]
-        ),
-    )
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 
 # ── Введення результатів (тільки адмін) ───────────────────────────────────────
@@ -429,7 +397,6 @@ async def set_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for i in range(0, len(args), 2):
         place = int(args[i])
         country_query = args[i + 1]
-        # Find matching country
         matched = next(
             (c for c in COUNTRIES if country_query.lower() in c.lower()), country_query
         )
@@ -437,7 +404,6 @@ async def set_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     db.save_official_results(results)
 
-    # Recalculate scores
     scores = db.calculate_all_scores()
     msg = f"✅ Результати збережено! ({len(results)} місць)\n\n"
     if scores:
@@ -451,7 +417,6 @@ async def set_results(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Встановити адміна ──────────────────────────────────────────────────────────
 async def set_admin(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Перший хто запустить /setadmin стає адміном"""
     user_id = update.effective_user.id
     if db.get_admin():
         await update.message.reply_text("Адмін вже встановлений!")
@@ -467,7 +432,6 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     users = db.get_all_users()
     total_ratings = sum(len(db.get_user_ratings(u["user_id"])) for u in users)
 
-    # Average scores per country
     country_avgs = db.get_country_averages()
 
     text = f"📊 *Загальна статистика:*\n\n"
@@ -484,26 +448,10 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ── Назад в меню ──────────────────────────────────────────────────────────────
 async def back_to_menu(query, context):
-    keyboard = [
-        [InlineKeyboardButton("⭐ Оцінити виступ", callback_data="menu_rate")],
-        [InlineKeyboardButton("🔮 Передбачення місць", callback_data="menu_predict")],
-        [InlineKeyboardButton("🏆 Таблиця лідерів", callback_data="menu_leaderboard")],
-        [InlineKeyboardButton("📊 Мої оцінки", callback_data="menu_my_ratings")],
-        [
-            InlineKeyboardButton(
-                "📋 Мої передбачення", callback_data="menu_my_predictions"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                "🎯 Результати (після фіналу)", callback_data="menu_results"
-            )
-        ],
-    ]
     await query.edit_message_text(
-        "🎶 *Євробачення 2025 — Головне меню*\n\nОбери дію:",
+        "🎶 *Євробачення 2026 — Головне меню*\n\nОбери розділ:",
         parse_mode="Markdown",
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD),
     )
 
 
@@ -514,7 +462,7 @@ def _load_token() -> str:
         return token.strip()
     if sys.stdin.isatty():
         return input("Введи токен бота: ").strip()
-    sys.exit("BOT_TOKEN is not set. Provide it via the BOT_TOKEN environment variable (e.g. in .env).")
+    sys.exit("BOT_TOKEN is not set. Provide it via the BOT_TOKEN environment variable.")
 
 
 def main():
@@ -527,9 +475,10 @@ def main():
     app.add_handler(CommandHandler("stats", stats))
     app.add_handler(CommandHandler("setresults", set_results))
     app.add_handler(CommandHandler("setadmin", set_admin))
+    app.add_handler(CommandHandler("хтопереміг", who_won))
 
-    # Menu callbacks
-    app.add_handler(CallbackQueryHandler(menu_handler, pattern="^menu_"))
+    # Tab and menu callbacks
+    app.add_handler(CallbackQueryHandler(menu_handler, pattern="^(tab_|menu_)"))
 
     # Rating flow
     app.add_handler(CallbackQueryHandler(rate_country_selected, pattern="^rate_\\d+$"))
