@@ -12,6 +12,7 @@ from telegram.ext import (
     ContextTypes,
     ConversationHandler,
     MessageHandler,
+    TypeHandler,
     filters,
 )
 
@@ -64,8 +65,6 @@ MAIN_KEYBOARD = [
 # ── /start ─────────────────────────────────────────────────────────────────────
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
-    db.register_user(user.id, user.first_name, user.username)
-
     await update.message.reply_text(
         f"🎶 *Євробачення {YEAR}!*\n\n"
         f"Привіт, {escape_markdown(user.first_name or '', version=1)}! 👋\n\n"
@@ -639,6 +638,15 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+# ── User refresh middleware ───────────────────────────────────────────────────
+async def refresh_user(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Run before every handler. Upserts the latest Telegram name/username into
+    the users table so leaderboards always show current handles."""
+    user = update.effective_user
+    if user is not None:
+        db.register_user(user.id, user.first_name or "", user.username)
+
+
 # ── Global error handler ──────────────────────────────────────────────────────
 async def on_error(update: object, context: ContextTypes.DEFAULT_TYPE):
     """Last-line-of-defense: log the traceback and try to apologise to the user.
@@ -685,6 +693,9 @@ def main():
     TOKEN = _load_token()
 
     app = Application.builder().token(TOKEN).build()
+
+    # User refresh middleware — runs before any other handler.
+    app.add_handler(TypeHandler(Update, refresh_user), group=-1)
 
     # Commands
     app.add_handler(CommandHandler("start", start))

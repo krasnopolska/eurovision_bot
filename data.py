@@ -101,10 +101,17 @@ init_db()
 
 # ── Users ──────────────────────────────────────────────────────────────────────
 def register_user(user_id: int, first_name: str, username: str | None):
+    """Insert or refresh a user. On every call, the latest first_name and
+    username from Telegram overwrite whatever was stored before, so leaderboards
+    show current handles after a rename."""
     with get_conn() as conn:
         conn.execute(
-            "INSERT OR IGNORE INTO users (user_id, first_name, username) VALUES (?, ?, ?)",
-            (user_id, first_name, username)
+            """INSERT INTO users (user_id, first_name, username)
+               VALUES (?, ?, ?)
+               ON CONFLICT(user_id) DO UPDATE SET
+                   first_name=excluded.first_name,
+                   username=excluded.username""",
+            (user_id, first_name, username),
         )
 
 def get_all_users():
