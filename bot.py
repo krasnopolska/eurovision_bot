@@ -172,9 +172,14 @@ async def rate_country_selected(update: Update, context: ContextTypes.DEFAULT_TY
             row = []
     if row:
         keyboard.append(row)
-    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_rate")])
 
     existing = db.get_user_rating_for_country(query.from_user.id, country)
+    if existing:
+        keyboard.append(
+            [InlineKeyboardButton("🗑 Видалити оцінку", callback_data=f"rmrate_{idx}")]
+        )
+    keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="menu_rate")])
+
     extra = f"\n_Поточна оцінка: {existing}/10_" if existing else ""
 
     await query.edit_message_text(
@@ -182,6 +187,33 @@ async def rate_country_selected(update: Update, context: ContextTypes.DEFAULT_TY
         f"Скільки балів ти даєш? (1–10){extra}",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
+    )
+
+
+async def remove_rating(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    idx = int(query.data.split("_")[1])
+    country = COUNTRIES[idx]
+    user_id = query.from_user.id
+
+    removed = db.delete_rating(user_id, country)
+    context.user_data.pop("rating_country", None)
+
+    if removed:
+        text = f"🗑 Оцінку для *{country}* видалено."
+    else:
+        text = f"_Оцінки для *{country}* не було._"
+
+    await query.edit_message_text(
+        f"{text}\n\nПродовжуй оцінювати або повертайся в меню.",
+        parse_mode="Markdown",
+        reply_markup=InlineKeyboardMarkup(
+            [
+                [InlineKeyboardButton("⭐ Оцінити інше", callback_data="menu_rate")],
+                [InlineKeyboardButton("◀️ Головне меню", callback_data="menu_back")],
+            ]
+        ),
     )
 
 
@@ -719,6 +751,7 @@ def main():
     # Rating flow
     app.add_handler(CallbackQueryHandler(rate_country_selected, pattern="^rate_\\d+$"))
     app.add_handler(CallbackQueryHandler(score_selected, pattern="^score_\\d+$"))
+    app.add_handler(CallbackQueryHandler(remove_rating, pattern="^rmrate_\\d+$"))
 
     # Prediction flow
     app.add_handler(

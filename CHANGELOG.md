@@ -29,5 +29,8 @@ All notable changes to this project will be documented in this file.
 - User names refresh on every interaction (not just at `/start`). The bot now runs a `TypeHandler` before each handler that upserts `first_name` / `username` from the Telegram update. Previously, `INSERT OR IGNORE` kept whatever name the user had when they first ran `/start`, so leaderboards still showed `@old_handle` after a rename.
 - `/setadmin` no longer tells two simultaneous callers that they both became admin. After the insert, the bot re-checks `is_admin(caller)`; the loser gets "❌ Someone else became admin first" instead of a fake success.
 
+### Added (UX)
+- **"🗑 Видалити оцінку" button** on the score-picker for any already-rated country. Previously, users could only overwrite a rating, never unrate. The button only appears when an existing rating is present.
+
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

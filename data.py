@@ -140,6 +140,15 @@ def get_user_rating_for_country(user_id: int, country: str):
         ).fetchone()
         return row['score'] if row else None
 
+
+def delete_rating(user_id: int, country: str) -> bool:
+    """Delete a single rating. Returns True if a row was removed, False if none existed."""
+    with get_conn() as conn:
+        cur = conn.execute(
+            "DELETE FROM ratings WHERE user_id=? AND country=?", (user_id, country)
+        )
+        return cur.rowcount > 0
+
 def get_country_averages():
     with get_conn() as conn:
         rows = conn.execute(
