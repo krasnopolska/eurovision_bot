@@ -19,3 +19,6 @@ venv/
 .idea/
 .vscode/
 .DS_Store
+
+# Claude Code — per-developer local settings (skills/ stays tracked)
+.claude/settings.local.json
