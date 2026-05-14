@@ -27,46 +27,31 @@ RATING_SCORE = 2
 PREDICT_PLACE = 3
 PREDICT_COUNTRY = 4
 
-# ── Євробачення 2025 — фіналісти ──────────────────────────────────────────────
-COUNTRIES = [
-    "🇦🇱 Албанія",
-    "🇦🇲 Вірменія",
-    "🇦🇹 Австрія",
-    "🇦🇿 Азербайджан",
-    "🇧🇪 Бельгія",
-    "🇭🇷 Хорватія",
-    "🇨🇾 Кіпр",
-    "🇨🇿 Чехія",
-    "🇩🇰 Данія",
-    "🇪🇪 Естонія",
-    "🇫🇮 Фінляндія",
-    "🇫🇷 Франція",
-    "🇬🇪 Грузія",
-    "🇩🇪 Німеччина",
-    "🇬🇷 Греція",
-    "🇮🇸 Ісландія",
-    "🇮🇪 Ірландія",
-    "🇮🇱 Ізраїль",
-    "🇮🇹 Італія",
-    "🇱🇻 Латвія",
-    "🇱🇹 Литва",
-    "🇲🇹 Мальта",
-    "🇲🇩 Молдова",
-    "🇳🇱 Нідерланди",
-    "🇳🇴 Норвегія",
-    "🇵🇱 Польща",
-    "🇵🇹 Португалія",
-    "🇸🇲 Сан-Марино",
-    "🇷🇸 Сербія",
-    "🇸🇮 Словенія",
-    "🇪🇸 Іспанія",
-    "🇸🇪 Швеція",
-    "🇨🇭 Швейцарія",
-    "🇬🇧 Велика Британія",
-    "🇺🇦 Україна",
-    "🇦🇺 Австралія",
-    "🇱🇺 Люксембург",
-]
+# ── Фіналісти (завантажуються з finalists.json) ───────────────────────────────
+FINALISTS_PATH = os.environ.get("FINALISTS_PATH", "finalists.json")
+
+
+def _load_finalists(path: str) -> tuple[int, list[str]]:
+    try:
+        with open(path, encoding="utf-8") as f:
+            cfg = json.load(f)
+    except FileNotFoundError:
+        sys.exit(f"finalists config not found at {path}")
+    except json.JSONDecodeError as e:
+        sys.exit(f"finalists config at {path} is not valid JSON: {e}")
+
+    year = cfg.get("year")
+    countries = cfg.get("countries")
+    if not isinstance(year, int):
+        sys.exit(f"finalists config: 'year' must be an integer, got {year!r}")
+    if not isinstance(countries, list) or not all(isinstance(c, str) and c for c in countries):
+        sys.exit("finalists config: 'countries' must be a non-empty list of strings")
+    if len(countries) != len(set(countries)):
+        sys.exit("finalists config: 'countries' contains duplicates")
+    return year, countries
+
+
+YEAR, COUNTRIES = _load_finalists(FINALISTS_PATH)
 
 MAIN_KEYBOARD = [
     [InlineKeyboardButton("⭐ Оцінити виступи фіналістів", callback_data="tab_rate")],
@@ -80,7 +65,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     db.register_user(user.id, user.first_name, user.username)
 
     await update.message.reply_text(
-        f"🎶 *Євробачення 2026!*\n\n"
+        f"🎶 *Євробачення {YEAR}!*\n\n"
         f"Привіт, {user.first_name}! 👋\n\n"
         f"Тут ти можеш:\n"
         f"• Ставити оцінки виступам (1–10 балів)\n"
@@ -359,7 +344,7 @@ async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
         return
 
-    text = "🎯 *Офіційні результати Євробачення 2026:*\n\n"
+    text = f"🎯 *Офіційні результати Євробачення {YEAR}:*\n\n"
     for r in results:
         text += f"#{r['place']} {r['country']}\n"
 
@@ -449,7 +434,7 @@ async def stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── Назад в меню ──────────────────────────────────────────────────────────────
 async def back_to_menu(query, context):
     await query.edit_message_text(
-        "🎶 *Євробачення 2026 — Головне меню*\n\nОбери розділ:",
+        f"🎶 *Євробачення {YEAR} — Головне меню*\n\nОбери розділ:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD),
     )
