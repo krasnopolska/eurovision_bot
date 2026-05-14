@@ -5,7 +5,7 @@ import sqlite3
 import os
 from datetime import datetime
 
-DB_PATH = "eurovision.db"
+DB_PATH = os.environ.get("DB_PATH", "eurovision.db")
 
 def get_conn():
     conn = sqlite3.connect(DB_PATH)

@@ -1,6 +1,7 @@
 import logging
 import json
 import os
+import sys
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     Application, CommandHandler, CallbackQueryHandler,
@@ -428,8 +429,17 @@ async def back_to_menu(query, context):
     )
 
 # ── Запуск ─────────────────────────────────────────────────────────────────────
+def _load_token() -> str:
+    token = os.environ.get("BOT_TOKEN")
+    if token:
+        return token.strip()
+    if sys.stdin.isatty():
+        return input("Введи токен бота: ").strip()
+    sys.exit("BOT_TOKEN is not set. Provide it via the BOT_TOKEN environment variable (e.g. in .env).")
+
+
 def main():
-    TOKEN = os.environ.get("BOT_TOKEN") or input("Введи токен бота: ").strip()
+    TOKEN = _load_token()
 
     app = Application.builder().token(TOKEN).build()
 

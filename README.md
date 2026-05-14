@@ -17,31 +17,38 @@
 
 ---
 
-## Крок 2 — Встанови Python залежності
+## Крок 2 — Налаштуй секрети
+
+Скопіюй шаблон і встав свій токен:
 
 ```bash
-# В терміналі, в папці з файлами бота:
-pip install -r requirements.txt
+cp .env.example .env
+# відкрий .env і встав BOT_TOKEN
 ```
+
+Файл `.env` додано в `.gitignore` — він **не** потрапить в git. Не комітити!
 
 ---
 
 ## Крок 3 — Запусти бота
 
-**Варіант A — токен вручну:**
+### Варіант A — Docker (рекомендовано)
+
+Потрібен встановлений [Docker](https://docs.docker.com/get-docker/) + Docker Compose.
+
 ```bash
-python bot.py
-# Вставиш токен коли попросить
+docker compose up -d --build      # запустити у фоні
+docker compose logs -f            # подивитись логи
+docker compose down               # зупинити
 ```
 
-**Варіант B — через змінну середовища (зручніше):**
-```bash
-# Mac/Linux:
-export BOT_TOKEN="твій_токен_тут"
-python bot.py
+База даних SQLite зберігається у Docker volume `eurovision-data` — переживе перебудову контейнера.
 
-# Windows (PowerShell):
-$env:BOT_TOKEN="твій_токен_тут"
+### Варіант B — локально без Docker
+
+```bash
+pip install -r requirements.txt
+export BOT_TOKEN="твій_токен_тут"    # або заповнений .env + `set -a; source .env; set +a`
 python bot.py
 ```
 
@@ -98,12 +105,18 @@ python bot.py
 
 ```
 eurovision_bot/
-├── bot.py          — головний файл бота
-├── data.py         — база даних (SQLite)
-├── requirements.txt — залежності
-└── README.md       — ця інструкція
+├── bot.py             — головний файл бота
+├── data.py            — база даних (SQLite)
+├── requirements.txt   — залежності
+├── Dockerfile         — образ для контейнера
+├── docker-compose.yml — оркестрація + volume для БД
+├── .env.example       — шаблон секретів (копіювати в .env)
+├── .dockerignore      — що НЕ копіювати в образ
+├── .gitignore         — що НЕ комітити (включно з .env та .db)
+└── README.md          — ця інструкція
 
-eurovision.db       — створюється автоматично при запуску
+.env                   — твій токен (gitignored, не комітити!)
+eurovision.db          — створюється автоматично; в Docker лежить у volume `eurovision-data`
 ```
 
 ---

@@ -4,18 +4,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Running the bot
 
+### Docker (default)
+
+```bash
+cp .env.example .env       # then fill in BOT_TOKEN
+docker compose up -d --build
+docker compose logs -f
+```
+
+The SQLite file lives at `/data/eurovision.db` inside the container, backed by the `eurovision-data` named volume. The container runs as a non-root user (`bot`, uid 1001) with a read-only root filesystem; only `/data` and `/tmp` are writable.
+
+### Local Python
+
 ```bash
 pip install -r requirements.txt
-
-# With env var (preferred):
-export BOT_TOKEN="your_token_here"
-python bot.py
-
-# Or let it prompt for the token:
+export BOT_TOKEN="your_token_here"   # or `set -a; source .env; set +a`
 python bot.py
 ```
 
+If `BOT_TOKEN` is unset and stdin is a TTY, `bot.py` prompts for it; under Docker/non-interactive runs it exits with an error instead of hanging.
+
 The bot token comes from [@BotFather](https://t.me/BotFather). After starting, the first user to send `/setadmin` becomes the admin.
+
+## Secrets
+
+`BOT_TOKEN` is read from the environment (loaded by `docker compose` from `.env`). `.env` is gitignored — never commit it. Use `.env.example` as the template. The DB path is controlled by `DB_PATH` (defaults to `eurovision.db` locally, `/data/eurovision.db` in Docker).
 
 ## Architecture
 
