@@ -22,6 +22,7 @@ All notable changes to this project will be documented in this file.
 - **`/setresults` is now an interactive wizard, not a text command.** Admin types `/setresults`, taps each place to pick a country from the inline keyboard, and the **Save Results** button stays disabled until all 10 slots are filled. Fixes the old text-parser bugs (multi-word names like "Велика Британія" silently corrupting downstream args, missing-match fuzzy-fallbacks silently writing wrong rows, place/country mismatches from `int()` crashes).
 - The wizard de-duplicates picks automatically — choosing a country already used in another slot moves it.
 - If official results are already saved, `/setresults` first asks "⚠️ Replace existing results?" with Yes/No, so a re-run no longer accidentally wipes the table.
+- `/winner` no longer shows a partial leaderboard. If fewer than 10 official results are stored (e.g. from a legacy partial entry), the command replies "⏳ Results not complete yet — N/10 places entered" and waits for the admin to finish.
 
 ### Removed
 - Stop tracking `eurovision.db` in git. The SQLite database is now gitignored; existing local copies are preserved on disk but no longer committed.

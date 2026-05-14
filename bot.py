@@ -358,6 +358,13 @@ async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode="Markdown",
         )
         return
+    if len(results) < TOP_N:
+        await update.message.reply_text(
+            f"⏳ Результати ще не завершено: введено *{len(results)}/{TOP_N}* місць.\n\n"
+            f"Рейтинг з'явиться, коли адмін заповнить усі {TOP_N}.",
+            parse_mode="Markdown",
+        )
+        return
 
     text = f"🎯 *Офіційні результати Євробачення {YEAR}:*\n\n"
     for r in results:
