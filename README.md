@@ -36,13 +36,54 @@ cp .env.example .env
 
 Потрібен встановлений [Docker](https://docs.docker.com/get-docker/) + Docker Compose.
 
+**Перший запуск:**
+
 ```bash
-docker compose up -d --build      # запустити у фоні
-docker compose logs -f            # подивитись логи
-docker compose down               # зупинити
+cp .env.example .env              # створити файл секретів (один раз)
+# відкрий .env, встав BOT_TOKEN
+docker compose up -d --build      # збудувати образ і запустити у фоні
+docker compose logs -f            # подивитись логи (Ctrl+C — вихід без зупинки)
 ```
 
-База даних SQLite зберігається у Docker volume `eurovision-data` — переживе перебудову контейнера.
+**Щоденні операції:**
+
+```bash
+docker compose ps                 # статус контейнера
+docker compose logs -f --tail=100 # останні 100 рядків логів + стрім
+docker compose restart            # перезапустити (без перебудови)
+docker compose stop               # зупинити, але зберегти контейнер
+docker compose start              # запустити назад зупинений контейнер
+docker compose down               # зупинити і видалити контейнер (volume лишається)
+```
+
+**Після зміни коду:**
+
+```bash
+docker compose up -d --build      # перебудувати образ і перезапустити
+```
+
+**Доступ всередину контейнера (debug):**
+
+```bash
+docker compose exec bot sh        # відкрити shell в запущеному контейнері
+docker compose exec bot ls /data  # перевірити вміст volume з БД
+```
+
+**Робота з базою:**
+
+```bash
+docker compose exec bot sqlite3 /data/eurovision.db ".tables"
+docker volume inspect eurovision_bot_eurovision-data   # де лежить volume на диску
+```
+
+**Повне очищення (увага — видалить БД!):**
+
+```bash
+docker compose down -v            # зупинити + видалити volume (втрата всіх голосів!)
+docker image rm eurovision-bot:latest   # видалити образ
+```
+
+База даних SQLite зберігається у Docker volume `eurovision-data` — переживе перебудову й оновлення контейнера. Образ збирається з `Dockerfile`, контейнер працює read-only від non-root юзера (`bot`, uid 1001); писати можна лише в `/data` (volume) і `/tmp` (tmpfs).
 
 ### Варіант B — локально без Docker
 
