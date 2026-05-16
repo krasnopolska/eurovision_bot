@@ -418,6 +418,23 @@ async def show_my_ratings(query, context):
     )
 
 
+async def view_my_rates(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    db.ensure_user(user_id, update.effective_user.username, update.effective_user.first_name)
+    ratings = db.get_user_ratings(user_id)
+
+    if not ratings:
+        text = "📊 У тебе ще немає оцінок!\n\nПочни оцінювати виступи через меню /start 👆"
+    else:
+        ratings_sorted = sorted(ratings, key=lambda x: x["score"], reverse=True)
+        text = f"📊 *Твої оцінки* ({len(ratings)}/{len(COUNTRIES)}):\n\n"
+        for r in ratings_sorted:
+            stars = "⭐" * ((r["score"] + 1) // 2)
+            text += f"{r['country']} — *{r['score']} балів* {stars}\n"
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
 # ── Мої передбачення ───────────────────────────────────────────────────────────
 async def show_my_predictions(query, context):
     user_id = query.from_user.id
@@ -798,6 +815,7 @@ def main():
     app.add_handler(CommandHandler("setresults", set_results))
     app.add_handler(CommandHandler("setadmin", set_admin))
     app.add_handler(CommandHandler("winner", who_won))
+    app.add_handler(CommandHandler("viewmyrates", view_my_rates))
 
     # Tab and menu callbacks
     app.add_handler(CallbackQueryHandler(menu_handler, pattern="^(tab_|menu_)"))
