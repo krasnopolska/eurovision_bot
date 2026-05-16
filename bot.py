@@ -255,7 +255,7 @@ async def show_prediction_menu(query, context):
     count = len(predictions)
 
     keyboard = []
-    for place in range(1, 11):
+    for place in range(1, TOP_N + 1):
         pred = next((p for p in predictions if p["place"] == place), None)
         if pred:
             label = f"#{place} → {pred['country']}"
@@ -265,8 +265,8 @@ async def show_prediction_menu(query, context):
     keyboard.append([InlineKeyboardButton("◀️ Назад", callback_data="tab_predict")])
 
     await query.edit_message_text(
-        "🔮 *Передбачення топ-10*\n\n"
-        f"Вгадай фінальні місця! Заповнено: {count}/10\n\n"
+        f"🔮 *Передбачення топ-{TOP_N}*\n\n"
+        f"Вгадай фінальні місця! Заповнено: {count}/{TOP_N}\n\n"
         "Натисни на місце, щоб вибрати країну:",
         parse_mode="Markdown",
         reply_markup=InlineKeyboardMarkup(keyboard),
@@ -427,10 +427,10 @@ async def show_my_predictions(query, context):
         text = "📋 У тебе ще немає передбачень!\n\nДодай їх в розділі 🔮"
     else:
         predictions_sorted = sorted(predictions, key=lambda x: x["place"])
-        text = "📋 *Твої передбачення топ-10:*\n\n"
+        text = f"📋 *Твої передбачення топ-{TOP_N}:*\n\n"
         for p in predictions_sorted:
             text += f"#{p['place']} → {p['country']}\n"
-        remaining = 10 - len(predictions)
+        remaining = TOP_N - len(predictions)
         if remaining > 0:
             text += f"\n_Залишилось заповнити: {remaining} місць_"
 
