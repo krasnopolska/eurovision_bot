@@ -16,7 +16,7 @@ RUN groupadd --system --gid 1001 bot \
 COPY --chown=bot:bot requirements.txt ./
 RUN pip install -r requirements.txt
 
-COPY --chown=bot:bot bot.py data.py ./
+COPY --chown=bot:bot bot.py data.py finalists.json ./
 
 USER bot
 
