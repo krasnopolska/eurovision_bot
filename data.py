@@ -7,6 +7,8 @@ from datetime import datetime
 
 DB_PATH = os.environ.get("DB_PATH", "eurovision.db")
 
+TOP_N = 25
+
 def get_conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
@@ -14,7 +16,7 @@ def get_conn():
 
 def init_db():
     with get_conn() as conn:
-        conn.executescript("""
+        conn.executescript(f"""
             CREATE TABLE IF NOT EXISTS users (
                 user_id    INTEGER PRIMARY KEY,
                 first_name TEXT,
@@ -34,7 +36,7 @@ def init_db():
             CREATE TABLE IF NOT EXISTS predictions (
                 id         INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id    INTEGER,
-                place      INTEGER CHECK(place BETWEEN 1 AND 10),
+                place      INTEGER CHECK(place BETWEEN 1 AND {TOP_N}),
                 country    TEXT,
                 updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
                 UNIQUE(user_id, place),
@@ -55,28 +57,40 @@ def init_db():
 
 
 def _migrate_predictions(conn):
-    """Upgrade legacy `predictions` tables (no UNIQUE(user_id, country), no place CHECK).
+    """Upgrade legacy `predictions` tables to the current schema.
 
-    Idempotent: if the table already has UNIQUE(user_id, country), this is a no-op.
-    Deduplicates rows that violate the new constraint by keeping the highest `id`
-    (most recently inserted) per (user_id, country), and drops any rows with
-    place outside 1..10.
+    Rebuilds the table when it is missing UNIQUE(user_id, country) or still
+    carries an outdated `place` CHECK bound (older builds capped predictions at
+    10 places; the cap is now TOP_N). Idempotent: a no-op once both the unique
+    constraint and the current CHECK bound are in place. Deduplicates rows that
+    violate UNIQUE(user_id, country) by keeping the highest `id` (most recently
+    inserted) per (user_id, country), and drops rows with place outside
+    1..TOP_N.
     """
+    table_sql = conn.execute(
+        "SELECT sql FROM sqlite_master WHERE type='table' AND name='predictions'"
+    ).fetchone()
+    check_current = table_sql and f"BETWEEN 1 AND {TOP_N}" in table_sql['sql']
+
+    has_country_unique = False
     indexes = conn.execute("PRAGMA index_list('predictions')").fetchall()
     for idx in indexes:
         if not idx['unique']:
             continue
         cols = {row['name'] for row in conn.execute(f"PRAGMA index_info('{idx['name']}')")}
         if cols == {'user_id', 'country'}:
-            return  # already migrated
+            has_country_unique = True
 
-    conn.executescript("""
+    if check_current and has_country_unique:
+        return  # already migrated
+
+    conn.executescript(f"""
         ALTER TABLE predictions RENAME TO predictions_old;
 
         CREATE TABLE predictions (
             id         INTEGER PRIMARY KEY AUTOINCREMENT,
             user_id    INTEGER,
-            place      INTEGER CHECK(place BETWEEN 1 AND 10),
+            place      INTEGER CHECK(place BETWEEN 1 AND {TOP_N}),
             country    TEXT,
             updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
             UNIQUE(user_id, place),
@@ -86,10 +100,10 @@ def _migrate_predictions(conn):
         INSERT INTO predictions (id, user_id, place, country, updated_at)
         SELECT id, user_id, place, country, updated_at
         FROM predictions_old
-        WHERE place BETWEEN 1 AND 10
+        WHERE place BETWEEN 1 AND {TOP_N}
           AND id IN (
               SELECT MAX(id) FROM predictions_old
-              WHERE place BETWEEN 1 AND 10
+              WHERE place BETWEEN 1 AND {TOP_N}
               GROUP BY user_id, country
           );
 
@@ -223,9 +237,6 @@ def _points_for_distance(distance: int) -> int:
     if distance == 3:
         return 40
     return max(0, 10 - distance)
-
-
-TOP_N = 25
 
 
 def calculate_all_scores():

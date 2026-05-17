@@ -1,9 +1,11 @@
+import asyncio
 import json
 import logging
 import os
 import sys
 
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.error import BadRequest, Forbidden, TelegramError
 from telegram.helpers import escape_markdown
 from telegram.ext import (
     Application,
@@ -460,22 +462,25 @@ async def show_my_predictions(query, context):
 
 
 # ── /хтопереміг ───────────────────────────────────────────────────────────────
-async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
+def _results_message() -> tuple[str, str]:
+    """Build the shared official-results + prediction-leaderboard text.
+
+    Returns ``(status, text)`` where status is one of:
+      - ``"none"``    — no results entered yet
+      - ``"partial"`` — some but fewer than TOP_N places entered
+      - ``"ready"``   — full results plus the prediction leaderboard
+    """
     results = db.get_official_results()
     if not results:
-        await update.message.reply_text(
+        return "none", (
             "🎯 Результати ще не введені.\n\n"
-            "Адмін може ввести їх командою `/setresults`.",
-            parse_mode="Markdown",
+            "Адмін може ввести їх командою `/setresults`."
         )
-        return
     if len(results) < TOP_N:
-        await update.message.reply_text(
+        return "partial", (
             f"⏳ Результати ще не завершено: введено *{len(results)}/{TOP_N}* місць.\n\n"
-            f"Рейтинг з'явиться, коли адмін заповнить усі {TOP_N}.",
-            parse_mode="Markdown",
+            f"Рейтинг з'явиться, коли адмін заповнить усі {TOP_N}."
         )
-        return
 
     text = f"🎯 *Офіційні результати Євробачення {YEAR}:*\n\n"
     for r in results:
@@ -493,7 +498,108 @@ async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         text += "\n_Ніхто ще не зробив передбачень._"
 
+    return "ready", text
+
+
+async def who_won(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _, text = _results_message()
     await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# ── Повний рейтинг країн за оцінками гравців ───────────────────────────────────
+def _ratings_message() -> tuple[bool, str]:
+    """Build the full ranked list of countries by players' average rating.
+
+    Returns ``(has_data, text)``; ``has_data`` is False when nobody has rated
+    anything yet.
+    """
+    avgs = db.get_country_averages()
+    if not avgs:
+        return False, "📭 Ще ніхто не виставив жодної оцінки."
+
+    text = (
+        f"⭐ *Рейтинг фіналістів за оцінками гравців ({YEAR}):*\n"
+        f"_(середній бал, {len(avgs)} із {len(COUNTRIES)} країн оцінено)_\n\n"
+    )
+    for i, c in enumerate(avgs, 1):
+        medal = ["🥇", "🥈", "🥉"][i - 1] if i <= 3 else f"{i}."
+        text += (
+            f"{medal} {c['country']} — *{c['avg']:.2f}* "
+            f"({c['votes']} {_votes_label(c['votes'])})\n"
+        )
+    return True, text
+
+
+async def ratings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    _, text = _ratings_message()
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# ── Розсилка (тільки адмін) ───────────────────────────────────────────────────
+async def _broadcast_to_all(
+    update: Update, context: ContextTypes.DEFAULT_TYPE, text: str
+) -> None:
+    """Send `text` to every registered user's private chat and report a
+    delivered/skipped summary back to the calling admin. Users who never
+    started the bot privately (e.g. only seen in a group) are skipped."""
+    users = db.get_all_users()
+    sent = 0
+    skipped = 0
+    for u in users:
+        try:
+            await context.bot.send_message(
+                chat_id=u["user_id"], text=text, parse_mode="Markdown"
+            )
+            sent += 1
+        except (Forbidden, BadRequest):
+            # Forbidden: user never opened a private chat / blocked the bot.
+            # BadRequest: chat not found (group-only user_id).
+            skipped += 1
+        except TelegramError:
+            logger.exception("Broadcast failed for user_id=%s", u["user_id"])
+            skipped += 1
+        await asyncio.sleep(0.05)  # stay well under Telegram's ~30 msg/s cap
+
+    await update.message.reply_text(
+        f"📢 Розсилку завершено.\n"
+        f"✅ Доставлено: {sent}\n"
+        f"⚠️ Пропущено: {skipped} (не починали приватний чат із ботом)."
+    )
+
+
+async def broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin-only: push the final results + leaderboard to every user."""
+    if not db.is_admin(update.effective_user.id):
+        await update.message.reply_text(
+            "❌ Тільки адміністратор може робити розсилку."
+        )
+        return
+
+    status, text = _results_message()
+    if status != "ready":
+        await update.message.reply_text(
+            "⏳ Розсилку можна зробити лише коли введено всі результати.\n\n" + text,
+            parse_mode="Markdown",
+        )
+        return
+
+    await _broadcast_to_all(update, context, text)
+
+
+async def broadcast_ratings(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Admin-only: push the full country-ratings list to every user."""
+    if not db.is_admin(update.effective_user.id):
+        await update.message.reply_text(
+            "❌ Тільки адміністратор може робити розсилку."
+        )
+        return
+
+    has_data, text = _ratings_message()
+    if not has_data:
+        await update.message.reply_text(text)
+        return
+
+    await _broadcast_to_all(update, context, text)
 
 
 # ── Введення результатів (тільки адмін) ───────────────────────────────────────
@@ -814,6 +920,9 @@ def main():
     app.add_handler(CommandHandler("setresults", set_results))
     app.add_handler(CommandHandler("setadmin", set_admin))
     app.add_handler(CommandHandler("winner", who_won))
+    app.add_handler(CommandHandler("ratings", ratings))
+    app.add_handler(CommandHandler("broadcast", broadcast))
+    app.add_handler(CommandHandler("broadcastratings", broadcast_ratings))
     app.add_handler(CommandHandler("viewmyrates", view_my_rates))
 
     # Tab and menu callbacks
